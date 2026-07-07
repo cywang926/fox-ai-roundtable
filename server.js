@@ -76,7 +76,7 @@ const sessions = { claude: null, codex: null, gemini: null };
 // 各家可選的模型（空值＝各家預設）。Codex 的 ChatGPT 帳號只有 gpt-5.5，
 // 所以它的選項是 reasoning effort；agy 用 `agy models` 的完整顯示名稱。
 const MODEL_OPTIONS = {
-  claude: ['sonnet', 'opus', 'haiku'],
+  claude: ['claude-sonnet-5', 'claude-opus-4-8', 'haiku'],
   codex: ['high', 'medium', 'low'],
   gemini: [
     'Gemini 3.5 Flash (Medium)', 'Gemini 3.5 Flash (High)', 'Gemini 3.5 Flash (Low)',

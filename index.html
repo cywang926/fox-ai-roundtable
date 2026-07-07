@@ -175,7 +175,7 @@ const $ = (id) => document.getElementById(id);
 
 // 模型選單：value 為空＝各家預設；清單須與 server.js 的 MODEL_OPTIONS 一致
 const MODEL_CHOICES = {
-  claude: { def: 'Sonnet 4.6', opts: [['opus', 'Opus 4.6'], ['haiku', 'Haiku 4.5']] },
+  claude: { def: 'Sonnet 4.6', opts: [['claude-sonnet-5', 'Sonnet 5'], ['claude-opus-4-8', 'Opus 4.8'], ['haiku', 'Haiku 4.5']] },
   codex: { def: 'GPT-5.5 High', opts: [['medium', 'GPT-5.5 Medium'], ['low', 'GPT-5.5 Low']] },
   gemini: { def: 'Gemini 3.5 Flash', opts: [
     ['Gemini 3.5 Flash (High)', 'Gemini 3.5 Flash (High)'],
