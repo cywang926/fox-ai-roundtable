@@ -73,9 +73,22 @@ function run(cmd, args, { input } = {}) {
 // 各家 CLI 的對話 session（伺服器重啟或按「新對話」即重置）
 const sessions = { claude: null, codex: null, gemini: null };
 
+// 各家可選的模型（空值＝各家預設）。Codex 的 ChatGPT 帳號只有 gpt-5.5，
+// 所以它的選項是 reasoning effort；agy 用 `agy models` 的完整顯示名稱。
+const MODEL_OPTIONS = {
+  claude: ['sonnet', 'opus', 'haiku'],
+  codex: ['high', 'medium', 'low'],
+  gemini: [
+    'Gemini 3.5 Flash (Medium)', 'Gemini 3.5 Flash (High)', 'Gemini 3.5 Flash (Low)',
+    'Gemini 3.1 Pro (Low)', 'Gemini 3.1 Pro (High)',
+    'Claude Sonnet 4.6 (Thinking)', 'Claude Opus 4.6 (Thinking)', 'GPT-OSS 120B (Medium)',
+  ],
+};
+
 const providers = {
-  async claude(prompt, img) {
+  async claude(prompt, img, model) {
     const args = ['-p', '--output-format', 'json'];
+    if (model) args.push('--model', model);
     if (sessions.claude) args.push('--resume', sessions.claude);
     args.push(promptWithImage(prompt, img));
     const r = await run('claude', args);
@@ -88,12 +101,13 @@ const providers = {
     return { ...r, answer };
   },
 
-  async codex(prompt, img) {
+  async codex(prompt, img, model) {
     const args = sessions.codex
       ? ['exec', 'resume', sessions.codex]
       : ['exec'];
     // -i 可吃多個值，要放在其他旗標前面，避免把 prompt 當成圖片檔名吞掉
     if (img) args.push('-i', img);
+    if (model) args.push('-c', `model_reasoning_effort=${model}`);
     args.push('--skip-git-repo-check', '--json', prompt);
     const r = await run('codex', args);
     let answer = '';
@@ -107,17 +121,18 @@ const providers = {
     return { ...r, answer };
   },
 
-  async gemini(prompt, img) {
+  async gemini(prompt, img, model) {
     // Antigravity CLI（使用你的 Gemini 訂閱）
     const agy = path.join(os.homedir(), '.local', 'bin', 'agy');
     const fullPrompt = promptWithImage(prompt, img);
+    const modelArgs = model ? ['--model', model] : [];
     if (sessions.gemini) {
-      const r = await run(agy, ['--conversation', sessions.gemini, '-p', fullPrompt]);
+      const r = await run(agy, [...modelArgs, '--conversation', sessions.gemini, '-p', fullPrompt]);
       return { ...r, answer: r.stdout.trim() };
     }
     // 第一輪：從 log 檔撈出 conversation ID，之後用它接續
     const log = path.join(os.tmpdir(), `agy-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);
-    const r = await run(agy, ['--log-file', log, '-p', fullPrompt]);
+    const r = await run(agy, [...modelArgs, '--log-file', log, '-p', fullPrompt]);
     try {
       const m = fs.readFileSync(log, 'utf8').match(/Created conversation ([a-f0-9-]+)/);
       if (m) sessions.gemini = m[1];
@@ -172,8 +187,8 @@ const server = http.createServer(async (req, res) => {
     let body = '';
     req.on('data', (d) => (body += d));
     req.on('end', async () => {
-      let provider, prompt, image;
-      try { ({ provider, prompt, image } = JSON.parse(body)); } catch {}
+      let provider, prompt, image, model;
+      try { ({ provider, prompt, image, model } = JSON.parse(body)); } catch {}
       if (!providers[provider] || typeof prompt !== 'string' || !prompt.trim()) {
         return json(res, 400, { ok: false, error: 'provider 或 prompt 不正確 / invalid provider or prompt' });
       }
@@ -181,8 +196,11 @@ const server = http.createServer(async (req, res) => {
       if (image && !img) {
         return json(res, 400, { ok: false, error: '圖片不存在 / image not found' });
       }
+      if (model && !MODEL_OPTIONS[provider].includes(model)) {
+        return json(res, 400, { ok: false, error: '模型不在允許清單 / model not allowed' });
+      }
       try {
-        const r = await providers[provider](prompt.trim(), img);
+        const r = await providers[provider](prompt.trim(), img, model || null);
         if (r.answer) {
           json(res, 200, { ok: true, answer: r.answer, elapsed: r.elapsed });
         } else {

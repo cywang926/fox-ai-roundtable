@@ -65,8 +65,13 @@
   .qimg { display: block; max-height: 140px; max-width: 260px; border-radius: 10px;
           margin: 8px 0 0; border: 1px solid var(--line); }
   .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 24px; }
-  .toggles { display: flex; gap: 16px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  .toggles { display: flex; gap: 16px; margin: 0 0 6px; font-size: 13px; color: var(--muted);
+             flex-wrap: wrap; }
   .toggles label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  .toggle-item { display: flex; gap: 6px; align-items: center; }
+  select.model { font: inherit; font-size: 12px; color: var(--muted); background: var(--card);
+                 border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px;
+                 max-width: 170px; }
 
   .round { margin-bottom: 32px; }
   .round .q { font-weight: 600; margin: 0 0 10px; white-space: pre-wrap; }
@@ -79,6 +84,7 @@
                  font-weight: 600; font-size: 14px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
   .card .meta { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .card .mtag { color: var(--muted); font-weight: 400; font-size: 11.5px; margin-left: 2px; }
   .card.claude .dot { background: var(--claude); }
   .card.codex  .dot { background: var(--codex); }
   .card.gemini .dot { background: var(--gemini); }
@@ -105,9 +111,9 @@
   </div>
 
   <div class="toggles">
-    <label><input type="checkbox" id="on-claude" checked> <span id="t-name-claude">Claude</span></label>
-    <label><input type="checkbox" id="on-codex" checked> <span id="t-name-codex">Codex（GPT）</span></label>
-    <label><input type="checkbox" id="on-gemini" checked> <span id="t-name-gemini">Antigravity（Gemini）</span></label>
+    <span class="toggle-item"><label><input type="checkbox" id="on-claude" checked> <span id="t-name-claude">Claude</span></label><select class="model" id="model-claude"></select></span>
+    <span class="toggle-item"><label><input type="checkbox" id="on-codex" checked> <span id="t-name-codex">Codex（GPT）</span></label><select class="model" id="model-codex"></select></span>
+    <span class="toggle-item"><label><input type="checkbox" id="on-gemini" checked> <span id="t-name-gemini">Antigravity（Gemini）</span></label><select class="model" id="model-gemini"></select></span>
   </div>
   <div class="ask">
     <textarea id="prompt" autofocus></textarea>
@@ -167,6 +173,40 @@ let L = I18N[lang];
 
 const $ = (id) => document.getElementById(id);
 
+// 模型選單：value 為空＝各家預設；清單須與 server.js 的 MODEL_OPTIONS 一致
+const MODEL_CHOICES = {
+  claude: { def: 'Sonnet 4.6', opts: [['opus', 'Opus 4.6'], ['haiku', 'Haiku 4.5']] },
+  codex: { def: 'GPT-5.5 High', opts: [['medium', 'GPT-5.5 Medium'], ['low', 'GPT-5.5 Low']] },
+  gemini: { def: 'Gemini 3.5 Flash', opts: [
+    ['Gemini 3.5 Flash (High)', 'Gemini 3.5 Flash (High)'],
+    ['Gemini 3.5 Flash (Low)', 'Gemini 3.5 Flash (Low)'],
+    ['Gemini 3.1 Pro (High)', 'Gemini 3.1 Pro (High)'],
+    ['Gemini 3.1 Pro (Low)', 'Gemini 3.1 Pro (Low)'],
+    ['Claude Sonnet 4.6 (Thinking)', 'Claude Sonnet 4.6 (Thinking)'],
+    ['Claude Opus 4.6 (Thinking)', 'Claude Opus 4.6 (Thinking)'],
+    ['GPT-OSS 120B (Medium)', 'GPT-OSS 120B (Medium)'],
+  ] },
+};
+
+function buildModelSelects() {
+  for (const p of ['claude', 'codex', 'gemini']) {
+    const sel = $('model-' + p);
+    const saved = localStorage.getItem('model-' + p) || '';
+    sel.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = MODEL_CHOICES[p].def + (lang === 'zh' ? '（預設）' : ' (default)');
+    sel.appendChild(def);
+    for (const [value, text] of MODEL_CHOICES[p].opts) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = text;
+      sel.appendChild(o);
+    }
+    sel.value = [...sel.options].some((o) => o.value === saved) ? saved : '';
+  }
+}
+
 function applyLang() {
   L = I18N[lang];
   document.documentElement.lang = L.htmlLang;
@@ -183,6 +223,7 @@ function applyLang() {
   $('attach').title = L.attach;
   $('chip-remove').title = L.removeImg;
   for (const p of ['claude', 'codex', 'gemini']) $('t-name-' + p).textContent = L.names[p];
+  buildModelSelects();
 }
 
 // 圖片附件（一次一張）
@@ -229,7 +270,7 @@ async function askOne(provider, prompt, card, image) {
     const res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, prompt, image }),
+      body: JSON.stringify({ provider, prompt, image, model: $('model-' + provider).value || undefined }),
     });
     const data = await res.json();
     clearInterval(tick);
@@ -299,7 +340,9 @@ async function ask() {
     const card = document.createElement('div');
     card.className = 'card ' + p;
     card.innerHTML = '<header><span class="dot"></span>' + L.names[p] +
-      '<span class="meta"></span></header><div class="body"><span class="waiting"></span></div>';
+      '<span class="mtag"></span><span class="meta"></span></header><div class="body"><span class="waiting"></span></div>';
+    const sel = $('model-' + p);
+    card.querySelector('.mtag').textContent = sel.value ? sel.selectedOptions[0].textContent : '';
     card.querySelector('.waiting').textContent = L.waiting;
     cols.appendChild(card);
     askOne(p, prompt, card, image);
@@ -317,6 +360,9 @@ $('reset').addEventListener('click', async () => {
   $('rounds').prepend(divider);
   $('prompt').focus();
 });
+for (const p of ['claude', 'codex', 'gemini']) {
+  $('model-' + p).addEventListener('change', () => localStorage.setItem('model-' + p, $('model-' + p).value));
+}
 $('attach').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', () => setAttachment($('file').files[0]));
 $('chip-remove').addEventListener('click', clearAttachment);

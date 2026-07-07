@@ -30,6 +30,7 @@ node server.js
 - 支援**接續對話**：三個 AI 都會記得同一場對話的上下文
 - 按「新對話」清除三家的對話記憶
 - 上方勾選框可只問其中幾家
+- 每家旁邊有**模型選單**：Claude 可換 Sonnet／Opus／Haiku；Codex 可調 reasoning effort（ChatGPT 帳號只有 GPT-5.5 一個模型）；Antigravity 可換 Gemini 3.5 Flash／3.1 Pro，甚至 Claude 和 GPT-OSS
 - 支援**附加圖片**（📎 按鈕或直接貼上），三個 AI 一起看圖回答
 - 回答以 Markdown 渲染，支援深色模式
 - 介面中英雙語：系統語言是中文時顯示中文，否則顯示英文，右上角可手動切換（UI auto-switches between Traditional Chinese and English based on your system language）
