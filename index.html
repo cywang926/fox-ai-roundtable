@@ -51,6 +51,19 @@
   .divider { display: flex; align-items: center; gap: 12px; color: var(--muted);
              font-size: 12.5px; margin: 28px 0; }
   .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+
+  .attach-chip { display: flex; align-items: center; gap: 10px; margin: 10px 0 0;
+                 padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+                 background: var(--card); width: fit-content; max-width: 100%; }
+  .attach-chip[hidden] { display: none; }
+  .attach-chip img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
+  .attach-chip span { font-size: 13px; color: var(--muted); overflow: hidden;
+                      text-overflow: ellipsis; white-space: nowrap; }
+  .attach-chip button { border: 0; background: none; color: var(--muted); cursor: pointer;
+                        font-size: 14px; padding: 4px; }
+  .attach-chip button:hover { color: var(--ink); }
+  .qimg { display: block; max-height: 140px; max-width: 260px; border-radius: 10px;
+          margin: 8px 0 0; border: 1px solid var(--line); }
   .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 24px; }
   .toggles { display: flex; gap: 16px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
   .toggles label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
@@ -98,8 +111,15 @@
   </div>
   <div class="ask">
     <textarea id="prompt" autofocus></textarea>
+    <button class="reset" id="attach" title="">📎</button>
     <button class="send" id="send">送出</button>
     <button class="reset" id="reset">新對話</button>
+  </div>
+  <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+  <div class="attach-chip" id="chip" hidden>
+    <img id="chip-img" alt="">
+    <span id="chip-name"></span>
+    <button id="chip-remove" title="">✕</button>
   </div>
   <p class="hint" id="t-hint"></p>
 
@@ -121,6 +141,7 @@ const I18N = {
     divider: '新對話',
     errPrefix: '出錯了：\n', connFail: '連線失敗：', unknown: '未知錯誤',
     foxAlt: '拿著乒乓球拍和 MacBook 的小白狐',
+    attach: '附加圖片（也可以直接貼上）', removeImg: '移除圖片', uploadFail: '圖片上傳失敗：',
     langBtn: 'EN', htmlLang: 'zh-Hant',
   },
   en: {
@@ -136,6 +157,7 @@ const I18N = {
     divider: 'New chat',
     errPrefix: 'Error:\n', connFail: 'Request failed: ', unknown: 'unknown error',
     foxAlt: 'A little white fox holding a ping-pong paddle and a MacBook',
+    attach: 'Attach an image (paste works too)', removeImg: 'Remove image', uploadFail: 'Image upload failed: ',
     langBtn: '中', htmlLang: 'en',
   },
 };
@@ -158,7 +180,26 @@ function applyLang() {
   $('reset').title = L.resetTitle;
   $('langBtn').textContent = L.langBtn;
   document.querySelector('.fox').alt = L.foxAlt;
+  $('attach').title = L.attach;
+  $('chip-remove').title = L.removeImg;
   for (const p of ['claude', 'codex', 'gemini']) $('t-name-' + p).textContent = L.names[p];
+}
+
+// 圖片附件（一次一張）
+let attachment = null; // { file, url }
+function setAttachment(file) {
+  clearAttachment();
+  if (!file || !file.type.startsWith('image/')) return;
+  attachment = { file, url: URL.createObjectURL(file) };
+  $('chip-img').src = attachment.url;
+  $('chip-name').textContent = file.name || 'image';
+  $('chip').hidden = false;
+}
+function clearAttachment() {
+  if (attachment) URL.revokeObjectURL(attachment.url);
+  attachment = null;
+  $('chip').hidden = true;
+  $('file').value = '';
 }
 
 function render(md) {
@@ -178,7 +219,7 @@ function setPending(delta) {
   btn.textContent = pending > 0 ? L.sending : L.send;
 }
 
-async function askOne(provider, prompt, card) {
+async function askOne(provider, prompt, card, image) {
   const body = card.querySelector('.body');
   const meta = card.querySelector('.meta');
   const t0 = Date.now();
@@ -188,7 +229,7 @@ async function askOne(provider, prompt, card) {
     const res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, prompt }),
+      body: JSON.stringify({ provider, prompt, image }),
     });
     const data = await res.json();
     clearInterval(tick);
@@ -209,17 +250,46 @@ async function askOne(provider, prompt, card) {
   }
 }
 
-function ask() {
+async function ask() {
   const prompt = $('prompt').value.trim();
   if (!prompt) return;
   const enabled = ['claude', 'codex', 'gemini'].filter((p) => $('on-' + p).checked);
   if (!enabled.length) return;
+
+  // 有附件先上傳（一次），三家共用同一張圖
+  let image = null, imgUrl = null;
+  if (attachment) {
+    const { file, url } = attachment;
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error);
+      image = data.file;
+      imgUrl = url;
+      attachment = null; // 保留 object URL 給提問區顯示，不 revoke
+      $('chip').hidden = true;
+      $('file').value = '';
+    } catch (err) {
+      alert(L.uploadFail + err);
+      return;
+    }
+  }
 
   const round = document.createElement('div');
   round.className = 'round';
   const q = document.createElement('p');
   q.className = 'q';
   q.textContent = prompt;
+  if (imgUrl) {
+    const im = document.createElement('img');
+    im.className = 'qimg';
+    im.src = imgUrl;
+    q.appendChild(im);
+  }
   const cols = document.createElement('div');
   cols.className = 'cols';
   round.append(q, cols);
@@ -232,7 +302,7 @@ function ask() {
       '<span class="meta"></span></header><div class="body"><span class="waiting"></span></div>';
     card.querySelector('.waiting').textContent = L.waiting;
     cols.appendChild(card);
-    askOne(p, prompt, card);
+    askOne(p, prompt, card, image);
   }
   $('prompt').value = '';
   $('prompt').focus();
@@ -246,6 +316,13 @@ $('reset').addEventListener('click', async () => {
   divider.textContent = L.divider;
   $('rounds').prepend(divider);
   $('prompt').focus();
+});
+$('attach').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', () => setAttachment($('file').files[0]));
+$('chip-remove').addEventListener('click', clearAttachment);
+$('prompt').addEventListener('paste', (e) => {
+  const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+  if (item) { e.preventDefault(); setAttachment(item.getAsFile()); }
 });
 $('langBtn').addEventListener('click', () => {
   lang = lang === 'zh' ? 'en' : 'zh';

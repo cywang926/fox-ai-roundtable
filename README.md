@@ -30,6 +30,7 @@ node server.js
 - 支援**接續對話**：三個 AI 都會記得同一場對話的上下文
 - 按「新對話」清除三家的對話記憶
 - 上方勾選框可只問其中幾家
+- 支援**附加圖片**（📎 按鈕或直接貼上），三個 AI 一起看圖回答
 - 回答以 Markdown 渲染，支援深色模式
 - 介面中英雙語：系統語言是中文時顯示中文，否則顯示英文，右上角可手動切換（UI auto-switches between Traditional Chinese and English based on your system language）
 
@@ -40,6 +41,8 @@ node server.js
 - `claude -p --output-format json`，之後用 `--resume <session_id>` 接續對話
 - `codex exec --json`，之後用 `codex exec resume <thread_id>` 接續
 - `agy -p`，第一輪從 log 取得 conversation ID，之後用 `--conversation <id>` 接續
+
+附加圖片時：Codex 走原生的 `-i` 參數；Claude 和 agy 沒有圖片參數，但它們都是能讀檔的 agent，把圖片路徑寫進 prompt 即可。圖片存在工作資料夾內，重啟伺服器時自動清除。
 
 ## 安全性
 

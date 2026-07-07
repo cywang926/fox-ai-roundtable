@@ -24,6 +24,28 @@ function cleanEnv() {
 const WORKSPACE = path.join(os.homedir(), '.fox-ai-roundtable');
 fs.mkdirSync(WORKSPACE, { recursive: true });
 
+// 清掉上次留下的上傳圖片
+for (const f of fs.readdirSync(WORKSPACE)) {
+  if (/^img-[a-z0-9]+\.(png|jpe?g|webp|gif)$/.test(f)) fs.unlinkSync(path.join(WORKSPACE, f));
+}
+
+const IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+// 圖片檔名只允許伺服器自己產生的格式，避免路徑穿越
+function imagePath(name) {
+  if (typeof name === 'string' && /^img-[a-z0-9]+\.(png|jpe?g|webp|gif)$/.test(name)) {
+    const p = path.join(WORKSPACE, name);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+// Claude 與 agy 沒有 --image 參數，但都是能讀檔的 agent：把路徑寫進 prompt
+function promptWithImage(prompt, img) {
+  return img ? `附件圖片 / attached image: ${img}\n\n${prompt}` : prompt;
+}
+
 function run(cmd, args, { input } = {}) {
   return new Promise((resolve) => {
     const started = Date.now();
@@ -49,10 +71,10 @@ function run(cmd, args, { input } = {}) {
 const sessions = { claude: null, codex: null, gemini: null };
 
 const providers = {
-  async claude(prompt) {
+  async claude(prompt, img) {
     const args = ['-p', '--output-format', 'json'];
     if (sessions.claude) args.push('--resume', sessions.claude);
-    args.push(prompt);
+    args.push(promptWithImage(prompt, img));
     const r = await run('claude', args);
     let answer = '';
     try {
@@ -63,10 +85,13 @@ const providers = {
     return { ...r, answer };
   },
 
-  async codex(prompt) {
+  async codex(prompt, img) {
     const args = sessions.codex
-      ? ['exec', 'resume', sessions.codex, '--skip-git-repo-check', '--json', prompt]
-      : ['exec', '--skip-git-repo-check', '--json', prompt];
+      ? ['exec', 'resume', sessions.codex]
+      : ['exec'];
+    // -i 可吃多個值，要放在其他旗標前面，避免把 prompt 當成圖片檔名吞掉
+    if (img) args.push('-i', img);
+    args.push('--skip-git-repo-check', '--json', prompt);
     const r = await run('codex', args);
     let answer = '';
     for (const line of r.stdout.split('\n')) {
@@ -79,16 +104,17 @@ const providers = {
     return { ...r, answer };
   },
 
-  async gemini(prompt) {
+  async gemini(prompt, img) {
     // Antigravity CLI（使用你的 Gemini 訂閱）
     const agy = path.join(os.homedir(), '.local', 'bin', 'agy');
+    const fullPrompt = promptWithImage(prompt, img);
     if (sessions.gemini) {
-      const r = await run(agy, ['--conversation', sessions.gemini, '-p', prompt]);
+      const r = await run(agy, ['--conversation', sessions.gemini, '-p', fullPrompt]);
       return { ...r, answer: r.stdout.trim() };
     }
     // 第一輪：從 log 檔撈出 conversation ID，之後用它接續
     const log = path.join(os.tmpdir(), `agy-${Date.now()}-${Math.random().toString(36).slice(2)}.log`);
-    const r = await run(agy, ['--log-file', log, '-p', prompt]);
+    const r = await run(agy, ['--log-file', log, '-p', fullPrompt]);
     try {
       const m = fs.readFileSync(log, 'utf8').match(/Created conversation ([a-f0-9-]+)/);
       if (m) sessions.gemini = m[1];
@@ -116,6 +142,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/api/upload') {
+    const ext = IMAGE_TYPES[req.headers['content-type']];
+    if (!ext) return json(res, 400, { ok: false, error: '不支援的圖片格式 / unsupported image type' });
+    const chunks = [];
+    let size = 0;
+    req.on('data', (d) => {
+      size += d.length;
+      if (size > MAX_IMAGE_BYTES) { req.destroy(); return; }
+      chunks.push(d);
+    });
+    req.on('end', () => {
+      const name = `img-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      fs.writeFileSync(path.join(WORKSPACE, name), Buffer.concat(chunks));
+      json(res, 200, { ok: true, file: name });
+    });
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/api/reset') {
     for (const k of Object.keys(sessions)) sessions[k] = null;
     return json(res, 200, { ok: true });
@@ -125,13 +169,17 @@ const server = http.createServer(async (req, res) => {
     let body = '';
     req.on('data', (d) => (body += d));
     req.on('end', async () => {
-      let provider, prompt;
-      try { ({ provider, prompt } = JSON.parse(body)); } catch {}
+      let provider, prompt, image;
+      try { ({ provider, prompt, image } = JSON.parse(body)); } catch {}
       if (!providers[provider] || typeof prompt !== 'string' || !prompt.trim()) {
         return json(res, 400, { ok: false, error: 'provider 或 prompt 不正確 / invalid provider or prompt' });
       }
+      const img = image ? imagePath(image) : null;
+      if (image && !img) {
+        return json(res, 400, { ok: false, error: '圖片不存在 / image not found' });
+      }
       try {
-        const r = await providers[provider](prompt.trim());
+        const r = await providers[provider](prompt.trim(), img);
         if (r.answer) {
           json(res, 200, { ok: true, answer: r.answer, elapsed: r.elapsed });
         } else {
