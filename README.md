@@ -1,4 +1,4 @@
-# 圓桌・roundtable 🦊
+# 圓桌・roundtable
 
 A local, dark-themed group chat where **you (cywang)**, **Claude Code CLI** and
 **Copilot CLI** share one conversation — not four independent Q&A columns, but an
