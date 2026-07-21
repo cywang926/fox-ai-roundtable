@@ -3,231 +3,486 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>小狐狸的 AI 圓桌</title>
+<title>圓桌・roundtable</title>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <style>
   :root {
-    --bg: #f5f4f0; --card: #ffffff; --ink: #1f1e1c; --muted: #8a867e;
-    --line: #e4e1da; --accent: #b05730;
-    --claude: #cc7854; --codex: #10a37f; --gemini: #4285f4;
+    --bg: #131316; --sidebar: #18181c; --card: #1d1d22; --ink: #e9e7e2; --muted: #8d8b92;
+    --line: #2b2a30; --accent: #d9822f; --danger: #d9534f;
+    --human: #e0a458; --claude: #9b8cf0; --copilot: #3ecf8e;
+    --ok: #3ecf8e; --busy: #e0a458; --err: #e0655a;
+    --diff-add: #3ecf8e; --diff-del: #e0655a;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #191817; --card: #232220; --ink: #ece9e3; --muted: #979289;
-            --line: #37352f; --accent: #d98d5f; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f3f2ee; --sidebar: #ebeae4; --card: #ffffff; --ink: #201f1c; --muted: #706c62;
+            --line: #ddd9d0; --accent: #b0602a; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 15px/1.65 -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 20px 80px; }
-  h1 { font-size: 20px; margin: 0 0 16px; }
-  h1 #t-sub { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 10px; }
-  .topbar { display: flex; align-items: center; gap: 14px; }
-  .topbar h1 { flex: 1; }
-  button.lang { border: 1px solid var(--line); background: var(--card); color: var(--muted);
-                border-radius: 8px; padding: 4px 10px; cursor: pointer; font: inherit;
-                font-size: 13px; flex: none; }
-  button.lang:hover { color: var(--ink); }
-  .q::before { content: "你："; color: var(--muted); font-weight: 400; }
-  html[lang="en"] .q::before { content: "You: "; }
-  .fox { width: 92px; height: 92px; border-radius: 50%; object-fit: cover; flex: none;
-         border: 2px solid var(--line); box-shadow: 0 4px 14px rgba(0,0,0,.12);
-         animation: bob 3.2s ease-in-out infinite; }
-  @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-2deg); }
-                   50% { transform: translateY(-5px) rotate(2deg); } }
-  @media (max-width: 600px) { .fox { width: 64px; height: 64px; } }
+         font: 14.5px/1.6 -apple-system, "PingFang TC", "Noto Sans TC", sans-serif; height: 100vh; overflow: hidden; }
+  button, select, textarea { font: inherit; color: inherit; }
+  .app { display: flex; height: 100vh; }
 
-  .ask { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
-  textarea { flex: 1; min-height: 72px; max-height: 240px; resize: vertical;
-             padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
-             background: var(--card); color: var(--ink); font: inherit; }
-  textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
-  button.send { padding: 12px 22px; border: 0; border-radius: 12px; cursor: pointer;
-                background: var(--accent); color: #fff; font: inherit; font-weight: 600; }
-  button.send:disabled { opacity: .5; cursor: not-allowed; }
-  button.reset { padding: 12px 16px; border: 1px solid var(--line); border-radius: 12px;
-                 cursor: pointer; background: var(--card); color: var(--muted); font: inherit; }
-  button.reset:hover { color: var(--ink); }
-  .divider { display: flex; align-items: center; gap: 12px; color: var(--muted);
-             font-size: 12.5px; margin: 28px 0; }
-  .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  /* ---------- Sidebar ---------- */
+  .sidebar { width: 250px; flex: none; background: var(--sidebar); border-right: 1px solid var(--line);
+             display: flex; flex-direction: column; padding: 16px 14px; overflow-y: auto; }
+  .sidebar-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .rt-title { font-weight: 700; font-size: 15px; }
+  .rt-sub { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  .lang { margin-left: auto; border: 1px solid var(--line); background: transparent; color: var(--muted);
+          border-radius: 7px; padding: 3px 8px; cursor: pointer; font-size: 12px; }
+  .lang:hover { color: var(--ink); }
+  .members-h { color: var(--muted); font-size: 12px; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .member { display: flex; gap: 9px; padding: 7px 4px; border-radius: 10px; align-items: flex-start; }
+  .avatar { width: 30px; height: 30px; border-radius: 9px; flex: none; display: flex; align-items: center;
+            justify-content: center; font-weight: 700; font-size: 12.5px; color: #1a1a1a; }
+  .avatar.human { background: var(--human); } .avatar.claude { background: var(--claude); }
+  .avatar.copilot { background: var(--copilot); }
+  .member-body { flex: 1; min-width: 0; }
+  .member-name-row { display: flex; align-items: center; gap: 6px; }
+  .member-name { font-weight: 600; font-size: 13px; }
+  .badge { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--line); color: var(--muted); }
+  .badge.chair { background: var(--accent); color: #1a1a1a; }
+  .member-role { color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  .member-status { color: var(--busy); font-size: 11px; margin-top: 1px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; margin-top: 5px; }
+  .status-dot.busy { background: var(--busy); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .model-pick { margin-top: 4px; width: 100%; font-size: 11px; color: var(--muted); background: var(--card);
+                border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 
-  .attach-chip { display: flex; align-items: center; gap: 10px; margin: 10px 0 0;
-                 padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
-                 background: var(--card); width: fit-content; max-width: 100%; }
+  .sidebar-foot { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .spend-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .spend-bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-bottom: 10px; }
+  .spend-bar > div { height: 100%; background: var(--accent); }
+  .hop-row { display: flex; justify-content: space-between; }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  .channel { font-weight: 700; font-size: 15px; }
+  .channel-sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+  .topbar-title { flex: 1; min-width: 0; }
+  .host-pill { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 6px 12px;
+               font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+  .host-pill b { color: var(--ink); }
+  button.pillbtn { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px;
+                   padding: 6px 12px; cursor: pointer; font-size: 12.5px; white-space: nowrap; }
+  button.pillbtn:hover { border-color: var(--accent); }
+  button.pillbtn:disabled { opacity: .4; cursor: not-allowed; }
+  button.stop { border: 1px solid var(--danger); background: rgba(217,83,79,.12); color: var(--danger); font-weight: 600; }
+  button.stop:hover { background: rgba(217,83,79,.22); }
+
+  .messages { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .msg { display: flex; gap: 11px; margin-bottom: 18px; }
+  .msg .avatar { width: 32px; height: 32px; border-radius: 9px; font-size: 13px; margin-top: 1px; }
+  .msg-body { flex: 1; min-width: 0; }
+  .msg-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+  .msg-name { font-weight: 700; font-size: 13.5px; }
+  .msg-ts { color: var(--muted); font-size: 11.5px; }
+  .msg-meta { color: var(--muted); font-size: 11px; }
+  .msg-text { overflow-wrap: break-word; }
+  .msg-text .mention { color: var(--accent); font-weight: 600; }
+  .msg-text > :first-child { margin-top: 0; } .msg-text > :last-child { margin-bottom: 0; }
+  .msg-text pre { background: rgba(128,128,128,.12); padding: 8px 10px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; }
+  .msg-text code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .msg-text p code, .msg-text li code { background: rgba(128,128,128,.15); padding: 1px 5px; border-radius: 4px; }
+  .msg-qimg { display: block; max-height: 140px; max-width: 260px; border-radius: 10px; margin-top: 6px; border: 1px solid var(--line); }
+
+  .divider { display: flex; justify-content: center; margin: 14px 0; }
+  .divider span { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px;
+                  font-size: 12px; color: var(--muted); }
+  .round-marker { color: var(--muted); font-size: 12px; margin: -4px 0 10px 43px; }
+
+  .toolcall { margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+  .toolcall-head { display: flex; align-items: center; gap: 8px; padding: 7px 11px; font-size: 12px;
+                   font-family: ui-monospace, "SF Mono", Menlo, monospace; border-bottom: 1px solid var(--line); }
+  .tc-icon { flex: none; }
+  .tc-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .tc-status { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: var(--line); }
+  .tc-status.ok { color: var(--ok); } .tc-status.error { color: var(--err); } .tc-status.running { color: var(--busy); }
+  .tc-body { margin: 0; padding: 9px 11px; font-size: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+             overflow-x: auto; white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
+  .tc-body .add { color: var(--diff-add); } .tc-body .del { color: var(--diff-del); }
+
+  /* ---------- Composer ---------- */
+  .composer { border-top: 1px solid var(--line); padding: 10px 20px 16px; }
+  .composer-status { color: var(--muted); font-size: 11.5px; margin-bottom: 8px; }
+  .composer-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .composer-row .spacer { flex: 1; }
+  button.chip { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 999px;
+                padding: 4px 11px; cursor: pointer; font-size: 12.5px; }
+  button.chip:hover { color: var(--ink); border-color: var(--accent); }
+  button.icon { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 8px;
+                width: 30px; height: 30px; cursor: pointer; }
+  button.icon:hover { color: var(--ink); }
+  select.effort { border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 8px;
+                  padding: 4px 8px; font-size: 12px; }
+  .attach-chip { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 10px;
+                 border: 1px solid var(--line); border-radius: 10px; background: var(--card); width: fit-content; max-width: 100%; }
   .attach-chip[hidden] { display: none; }
-  .attach-chip img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
-  .attach-chip span { font-size: 13px; color: var(--muted); overflow: hidden;
-                      text-overflow: ellipsis; white-space: nowrap; }
-  .attach-chip button { border: 0; background: none; color: var(--muted); cursor: pointer;
-                        font-size: 14px; padding: 4px; }
-  .attach-chip button:hover { color: var(--ink); }
-  .qimg { display: block; max-height: 140px; max-width: 260px; border-radius: 10px;
-          margin: 8px 0 0; border: 1px solid var(--line); }
-  .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 24px; }
-  .toggles { display: flex; gap: 16px; margin: 0 0 6px; font-size: 13px; color: var(--muted);
-             flex-wrap: wrap; }
-  .toggles label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
-  .toggle-item { display: flex; gap: 6px; align-items: center; }
-  select.model { font: inherit; font-size: 12px; color: var(--muted); background: var(--card);
-                 border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px;
-                 max-width: 170px; }
-
-  .round { margin-bottom: 32px; }
-  .round .q { font-weight: 600; margin: 0 0 10px; white-space: pre-wrap; }
-  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
-
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-          padding: 14px 16px; min-height: 90px; }
-  .card header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
-                 font-weight: 600; font-size: 14px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-  .card .meta { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 12px; }
-  .card .mtag { color: var(--muted); font-weight: 400; font-size: 11.5px; margin-left: 2px; }
-  .card.claude .dot { background: var(--claude); }
-  .card.codex  .dot { background: var(--codex); }
-  .card.gemini .dot { background: var(--gemini); }
-
-  .body { font-size: 14.5px; overflow-wrap: break-word; }
-  .body > :first-child { margin-top: 0; } .body > :last-child { margin-bottom: 0; }
-  .body pre { background: rgba(128,128,128,.12); padding: 10px 12px; border-radius: 8px;
-              overflow-x: auto; font-size: 13px; }
-  .body code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .body p code, .body li code { background: rgba(128,128,128,.15); padding: 1px 5px; border-radius: 4px; }
-  .body table { border-collapse: collapse; } .body td, .body th { border: 1px solid var(--line); padding: 4px 8px; }
-  .err { color: #c0392b; white-space: pre-wrap; font-size: 13px; }
+  .attach-chip img { width: 38px; height: 38px; object-fit: cover; border-radius: 6px; }
+  .attach-chip span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attach-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 4px; }
+  .input-row { display: flex; gap: 10px; align-items: flex-end; }
+  textarea#prompt { flex: 1; min-height: 52px; max-height: 200px; resize: vertical; padding: 11px 13px;
+                    border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); }
+  textarea#prompt:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  textarea#prompt:disabled { opacity: .5; }
+  button.send { padding: 11px 22px; border: 0; border-radius: 12px; cursor: pointer; background: var(--accent);
+                color: #1a1a1a; font-weight: 700; }
+  button.send:disabled { opacity: .5; cursor: not-allowed; }
   .waiting { color: var(--muted); }
   .waiting::after { content: ""; display: inline-block; width: 1em; animation: dots 1.2s steps(4) infinite; }
   @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="topbar">
-    <h1><span id="t-title">小狐狸的 AI 圓桌</span> <span id="t-sub">同一個問題，三個 AI 一起回答</span></h1>
-    <button class="lang" id="langBtn" title="Switch language">EN</button>
-    <img class="fox" src="fox.png" alt="">
-  </div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div>
+        <div class="rt-title">圓桌・roundtable</div>
+        <div class="rt-sub" id="t-sidebar-sub">本地・Claude + Copilot CLI</div>
+      </div>
+      <button class="lang" id="langBtn" title="Switch language">EN</button>
+    </div>
+    <div class="members-h" id="t-members">成員</div>
+    <div class="members" id="members"></div>
+    <div class="sidebar-foot">
+      <div class="spend-row"><span id="t-spend">今日花費</span><span id="spendVal">$0.00</span></div>
+      <div class="spend-bar"><div id="spendBar" style="width:0%"></div></div>
+      <div class="hop-row"><span id="t-hop">連續 agent hop</span><span id="hopVal">0 / 6</span></div>
+    </div>
+  </aside>
 
-  <div class="toggles">
-    <span class="toggle-item"><label><input type="checkbox" id="on-claude" checked> <span id="t-name-claude">Claude</span></label><select class="model" id="model-claude"></select></span>
-    <span class="toggle-item"><label><input type="checkbox" id="on-codex" checked> <span id="t-name-codex">Codex（GPT）</span></label><select class="model" id="model-codex"></select></span>
-    <span class="toggle-item"><label><input type="checkbox" id="on-gemini" checked> <span id="t-name-gemini">Antigravity（Gemini）</span></label><select class="model" id="model-gemini"></select></span>
-  </div>
-  <div class="ask">
-    <textarea id="prompt" autofocus></textarea>
-    <button class="reset" id="attach" title="">📎</button>
-    <button class="send" id="send">送出</button>
-    <button class="reset" id="reset">新對話</button>
-  </div>
-  <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
-  <div class="attach-chip" id="chip" hidden>
-    <img id="chip-img" alt="">
-    <span id="chip-name"></span>
-    <button id="chip-remove" title="">✕</button>
-  </div>
-  <p class="hint" id="t-hint"></p>
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title">
+        <div class="channel">#圓桌・roundtable</div>
+        <div class="channel-sub" id="t-channel-sub">cywang、Claude、Copilot CLI 共用同一場對話</div>
+      </div>
+      <div class="host-pill" id="hostPill">主持人：<b id="hostName">cywang</b>（在場）</div>
+      <button class="pillbtn" id="handoffBtn">交棒給 Claude</button>
+      <button class="pillbtn" id="pauseBtn">⏸ 暫停</button>
+      <button class="pillbtn stop" id="stopBtn">■ STOP</button>
+    </div>
 
-  <div id="rounds"></div>
+    <div class="messages" id="messages"></div>
+
+    <div class="composer">
+      <div class="composer-status" id="composerStatus"></div>
+      <div class="composer-row">
+        <button class="icon" id="attach" title="">📎</button>
+        <button class="chip" data-m="claude">@claude</button>
+        <button class="chip" data-m="copilot">@copilot</button>
+        <button class="chip" data-m="all">@all</button>
+        <div class="spacer"></div>
+        <span id="t-effort" style="color:var(--muted); font-size:12px;">effort</span>
+        <select class="effort" id="effort"></select>
+      </div>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+      <div class="attach-chip" id="chip" hidden>
+        <img id="chip-img" alt="">
+        <span id="chip-name"></span>
+        <button id="chip-remove" title="">✕</button>
+      </div>
+      <div class="input-row">
+        <textarea id="prompt" autofocus></textarea>
+        <button class="send" id="send">送出</button>
+      </div>
+    </div>
+  </main>
 </div>
 
 <script>
 const I18N = {
   zh: {
-    title: '小狐狸的 AI 圓桌',
-    sub: '同一個問題，三個 AI 一起回答',
-    placeholder: '輸入你的問題…（⌘ + Enter 送出）',
-    send: '送出', sending: '回覆中…',
-    reset: '新對話', resetTitle: '清除三個 AI 的對話記憶，開始新對話',
-    hint: '回答透過本機的 Claude CLI、Codex CLI、Antigravity CLI（agy）產生，通常需要 10 秒到 1 分鐘。三個 AI 都會記得同一場對話的上下文，按「新對話」可重新開始。',
-    names: { claude: 'Claude', codex: 'Codex（GPT）', gemini: 'Antigravity（Gemini）' },
-    waiting: '思考中',
-    sec: (s) => s + ' 秒',
-    divider: '新對話',
-    errPrefix: '出錯了：\n', connFail: '連線失敗：', unknown: '未知錯誤',
-    foxAlt: '拿著乒乓球拍和 MacBook 的小白狐',
+    sidebarSub: '本地・Claude + Copilot CLI', members: '成員',
+    channelSub: 'cywang、Claude、Copilot CLI 共用同一場對話',
+    spend: '今日花費', hop: '連續 agent hop',
+    placeholder: '以主持人身分發言…（@ 點名才會叫醒該 agent，⌘ + Enter 送出）',
+    send: '送出', sending: '送出中…',
+    hostAt: '（在場）', hostChairing: '代理主持中', reclaim: '回場', handoff: '交棒給 Claude',
+    pause: '⏸ 暫停', resume: '▶ 繼續', stop: '■ STOP',
+    effort: 'effort',
     attach: '附加圖片（也可以直接貼上）', removeImg: '移除圖片', uploadFail: '圖片上傳失敗：',
+    connFail: '連線失敗：', chairHeld: '主持棒目前在 agent 手上，請先按「回場」',
     langBtn: 'EN', htmlLang: 'zh-Hant',
+    names: { human: 'cywang', claude: 'Claude', copilot: 'Copilot CLI' },
+    roles: { human: 'human・決策權', claude: '顧問・可代理主持', copilot: '工程・改檔/執行' },
+    running: '執行中…',
   },
   en: {
-    title: 'Fox AI Roundtable',
-    sub: 'One question, three AIs answer together',
-    placeholder: 'Ask anything… (⌘ + Enter to send)',
-    send: 'Send', sending: 'Waiting…',
-    reset: 'New chat', resetTitle: "Clear all three AIs' memory and start fresh",
-    hint: 'Answers are generated locally by the Claude CLI, Codex CLI and Antigravity CLI (agy), usually within 10s–1min. All three AIs remember the conversation context — click "New chat" to start over.',
-    names: { claude: 'Claude', codex: 'Codex (GPT)', gemini: 'Antigravity (Gemini)' },
-    waiting: 'Thinking',
-    sec: (s) => s + 's',
-    divider: 'New chat',
-    errPrefix: 'Error:\n', connFail: 'Request failed: ', unknown: 'unknown error',
-    foxAlt: 'A little white fox holding a ping-pong paddle and a MacBook',
+    sidebarSub: 'Local・Claude + Copilot CLI', members: 'Members',
+    channelSub: 'cywang, Claude and Copilot CLI share one conversation',
+    spend: 'Spend today', hop: 'Consecutive agent hops',
+    placeholder: 'Speak as host… (@mention to wake an agent, ⌘ + Enter to send)',
+    send: 'Send', sending: 'Sending…',
+    hostAt: ' (here)', hostChairing: 'acting host', reclaim: 'Reclaim', handoff: 'Hand off to Claude',
+    pause: '⏸ Pause', resume: '▶ Resume', stop: '■ STOP',
+    effort: 'effort',
     attach: 'Attach an image (paste works too)', removeImg: 'Remove image', uploadFail: 'Image upload failed: ',
+    connFail: 'Request failed: ', chairHeld: 'An agent holds the chair — click "Reclaim" first',
     langBtn: '中', htmlLang: 'en',
+    names: { human: 'cywang', claude: 'Claude', copilot: 'Copilot CLI' },
+    roles: { human: 'human・decision maker', claude: 'advisor・can chair', copilot: 'engineering・edits/runs' },
+    running: 'running…',
   },
 };
 
 let lang = localStorage.getItem('lang') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en');
 let L = I18N[lang];
-
 const $ = (id) => document.getElementById(id);
 
-// 模型選單：value 為空＝各家預設；清單須與 server.js 的 MODEL_OPTIONS 一致
 const MODEL_CHOICES = {
-  claude: { def: 'Sonnet 4.6', opts: [['claude-sonnet-5', 'Sonnet 5'], ['claude-opus-4-8', 'Opus 4.8'], ['haiku', 'Haiku 4.5']] },
-  codex: { def: 'GPT-5.5 High', opts: [['medium', 'GPT-5.5 Medium'], ['low', 'GPT-5.5 Low']] },
-  gemini: { def: 'Gemini 3.5 Flash', opts: [
-    ['Gemini 3.5 Flash (High)', 'Gemini 3.5 Flash (High)'],
-    ['Gemini 3.5 Flash (Low)', 'Gemini 3.5 Flash (Low)'],
-    ['Gemini 3.1 Pro (High)', 'Gemini 3.1 Pro (High)'],
-    ['Gemini 3.1 Pro (Low)', 'Gemini 3.1 Pro (Low)'],
-    ['Claude Sonnet 4.6 (Thinking)', 'Claude Sonnet 4.6 (Thinking)'],
-    ['Claude Opus 4.6 (Thinking)', 'Claude Opus 4.6 (Thinking)'],
-    ['GPT-OSS 120B (Medium)', 'GPT-OSS 120B (Medium)'],
-  ] },
+  claude: { def: 'Sonnet 5', opts: [['claude-sonnet-5', 'Sonnet 5'], ['claude-opus-4-8', 'Opus 4.8'], ['haiku', 'Haiku 4.5']] },
 };
+const EFFORT_CHOICES = [['low', 'low'], ['medium', 'medium'], ['high', 'high']];
+function effortDefaultLabel() { return lang === 'zh' ? 'medium（預設）' : 'medium (default)'; }
 
-function buildModelSelects() {
-  for (const p of ['claude', 'codex', 'gemini']) {
-    const sel = $('model-' + p);
-    const saved = localStorage.getItem('model-' + p) || '';
-    sel.innerHTML = '';
-    const def = document.createElement('option');
-    def.value = '';
-    def.textContent = MODEL_CHOICES[p].def + (lang === 'zh' ? '（預設）' : ' (default)');
-    sel.appendChild(def);
-    for (const [value, text] of MODEL_CHOICES[p].opts) {
-      const o = document.createElement('option');
-      o.value = value;
-      o.textContent = text;
-      sel.appendChild(o);
-    }
-    sel.value = [...sel.options].some((o) => o.value === saved) ? saved : '';
+let lastId = 0;
+let known = { chair: 'human', epoch: 1, hopCount: 0, hopLimit: 6, paused: false, spentUsd: 0, credits: 0, turns: 0, busy: { claude: false, copilot: false } };
+let attachment = null; // { file, url }
+let uploadedImage = null; // server filename once uploaded
+let sendBusy = false;
+
+function render(md) {
+  const withMentions = md.replace(/@(claude|copilot|all)\b/gi, '<span class="mention">@$1</span>');
+  if (window.marked && window.DOMPurify) return DOMPurify.sanitize(marked.parse(withMentions));
+  const div = document.createElement('div');
+  div.textContent = md;
+  return '<pre style="white-space:pre-wrap">' + div.innerHTML + '</pre>';
+}
+
+function diffHtml(text) {
+  return text.split('\n').map((line) => {
+    const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    if (line.startsWith('+')) return '<span class="add">' + esc + '</span>';
+    if (line.startsWith('-')) return '<span class="del">' + esc + '</span>';
+    return esc;
+  }).join('\n');
+}
+
+function fmtTs(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString(lang === 'zh' ? 'zh-TW' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function buildToolCallEl(tc) {
+  const box = document.createElement('div');
+  box.className = 'toolcall';
+  const head = document.createElement('div');
+  head.className = 'toolcall-head';
+  head.innerHTML = '<span class="tc-icon">⚙</span><span class="tc-label"></span><span class="tc-status"></span>';
+  head.querySelector('.tc-label').textContent = tc.label || '';
+  const st = head.querySelector('.tc-status');
+  st.textContent = tc.status === 'ok' ? '✓' : tc.status === 'error' ? '✗' : '…';
+  st.classList.add(tc.status || 'ok');
+  box.appendChild(head);
+  const body = tc.diff || tc.output;
+  if (body) {
+    const pre = document.createElement('pre');
+    pre.className = 'tc-body';
+    pre.innerHTML = tc.diff ? diffHtml(tc.diff) : diffHtml(tc.output.split('\n').map((l) => ' ' + l).join('\n'));
+    box.appendChild(pre);
   }
+  return box;
+}
+
+function buildMessageEl(m) {
+  if (m.kind === 'system') {
+    const div = document.createElement('div');
+    div.className = m.text.startsWith('▸') ? 'round-marker' : 'divider';
+    if (m.text.startsWith('▸')) { div.textContent = m.text; return div; }
+    const span = document.createElement('span');
+    span.textContent = m.text;
+    div.appendChild(span);
+    return div;
+  }
+  const row = document.createElement('div');
+  row.className = 'msg';
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar ' + m.speaker;
+  avatar.textContent = L.names[m.speaker].slice(0, 1).toUpperCase();
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  const head = document.createElement('div');
+  head.className = 'msg-head';
+  const name = document.createElement('span');
+  name.className = 'msg-name';
+  name.textContent = L.names[m.speaker];
+  head.appendChild(name);
+  if (m.speaker === 'human') {
+    const b = document.createElement('span'); b.className = 'badge chair'; b.textContent = lang === 'zh' ? '主持人' : 'host';
+    head.appendChild(b);
+  } else if (m.speaker === 'claude' && known.chair === 'claude') {
+    const b = document.createElement('span'); b.className = 'badge chair'; b.textContent = lang === 'zh' ? '代理主持' : 'acting host';
+    head.appendChild(b);
+  }
+  const ts = document.createElement('span'); ts.className = 'msg-ts'; ts.textContent = fmtTs(m.ts);
+  head.appendChild(ts);
+  if (m.elapsedMs) {
+    const meta = document.createElement('span'); meta.className = 'msg-meta';
+    meta.textContent = (m.elapsedMs / 1000).toFixed(1) + 's';
+    head.appendChild(meta);
+  }
+  body.appendChild(head);
+  const text = document.createElement('div');
+  text.className = 'msg-text';
+  text.innerHTML = render(m.text);
+  body.appendChild(text);
+  if (m.image) {
+    const im = document.createElement('img');
+    im.className = 'msg-qimg';
+    im.src = '/api/image/' + encodeURIComponent(m.image);
+    body.appendChild(im);
+  }
+  for (const tc of (m.toolCalls || [])) body.appendChild(buildToolCallEl(tc));
+  row.append(avatar, body);
+  return row;
+}
+
+function renderNewMessages(msgs) {
+  const box = $('messages');
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  for (const m of msgs) {
+    lastId = Math.max(lastId, m.id);
+    box.appendChild(buildMessageEl(m));
+  }
+  if (msgs.length && atBottom) box.scrollTop = box.scrollHeight;
+}
+
+function updateHeader(data) {
+  known = data;
+  $('spendVal').textContent = '$' + data.spentUsd.toFixed(2) + (data.credits ? ' · ' + data.credits.toFixed(1) + ' cr' : '');
+  $('spendBar').style.width = Math.min(100, data.spentUsd * 20) + '%';
+  $('hopVal').textContent = data.hopCount + ' / ' + data.hopLimit;
+
+  const chairName = L.names[data.chair];
+  $('hostPill').innerHTML = (lang === 'zh' ? '主持人：' : 'Host: ') + '<b id="hostName">' + chairName + '</b>' +
+    (data.chair === 'human' ? L.hostAt : '（' + L.hostChairing + '）');
+
+  const humanChair = data.chair === 'human';
+  $('handoffBtn').hidden = !humanChair;
+  $('handoffBtn').disabled = data.busy.claude || data.busy.copilot;
+  $('handoffBtn').textContent = L.handoff;
+
+  $('prompt').disabled = !humanChair;
+  const anyBusy = data.busy.claude || data.busy.copilot;
+  $('send').disabled = !humanChair || anyBusy || sendBusy;
+  $('send').textContent = anyBusy || sendBusy ? L.sending : L.send;
+  const epochLabel = lang === 'zh' ? 'chair epoch #' + data.epoch + '・holder：' + chairName
+                                    : 'chair epoch #' + data.epoch + ' · holder: ' + chairName;
+  $('composerStatus').textContent = epochLabel +
+    (humanChair ? '' : '  — ' + (lang === 'zh' ? '按上方「回場」以繼續發言' : 'click "Reclaim" above to speak again'));
+
+  $('pauseBtn').textContent = data.paused ? L.resume : L.pause;
+
+  for (const key of ['claude', 'copilot']) {
+    const dot = document.querySelector('.member[data-key="' + key + '"] .status-dot');
+    const statusLine = document.querySelector('.member[data-key="' + key + '"] .member-status');
+    if (!dot) continue;
+    dot.classList.toggle('busy', !!data.busy[key]);
+    statusLine.textContent = data.busy[key] ? L.running : '';
+    const chairBadge = document.querySelector('.member[data-key="' + key + '"] .chair-badge');
+    if (chairBadge) chairBadge.hidden = !(key === 'claude' && data.chair === 'claude');
+  }
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/api/state?since=' + lastId);
+    const data = await res.json();
+    if (!data.ok) return;
+    renderNewMessages(data.messages);
+    updateHeader(data);
+  } catch {}
+}
+setInterval(poll, 800);
+
+function buildMembers() {
+  const wrap = $('members');
+  wrap.innerHTML = '';
+  for (const key of ['human', 'claude', 'copilot']) {
+    const row = document.createElement('div');
+    row.className = 'member';
+    row.dataset.key = key;
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar ' + key;
+    avatar.textContent = L.names[key].slice(0, 1).toUpperCase();
+    const dot = document.createElement('div');
+    dot.className = 'status-dot';
+    const body = document.createElement('div');
+    body.className = 'member-body';
+    const nameRow = document.createElement('div');
+    nameRow.className = 'member-name-row';
+    const nm = document.createElement('span'); nm.className = 'member-name'; nm.textContent = L.names[key];
+    nameRow.appendChild(nm);
+    if (key === 'human') {
+      const b = document.createElement('span'); b.className = 'badge chair'; b.textContent = lang === 'zh' ? '主持人' : 'host';
+      nameRow.appendChild(b);
+    }
+    if (key === 'claude') {
+      const b = document.createElement('span'); b.className = 'badge chair chair-badge'; b.textContent = lang === 'zh' ? '代理主持' : 'acting host'; b.hidden = true;
+      nameRow.appendChild(b);
+    }
+    const role = document.createElement('div'); role.className = 'member-role'; role.textContent = L.roles[key];
+    const status = document.createElement('div'); status.className = 'member-status';
+    body.append(nameRow, role, status);
+    if (MODEL_CHOICES[key]) {
+      const sel = document.createElement('select');
+      sel.className = 'model-pick'; sel.id = 'model-' + key;
+      const def = document.createElement('option'); def.value = '';
+      def.textContent = MODEL_CHOICES[key].def + (lang === 'zh' ? '（預設）' : ' (default)');
+      sel.appendChild(def);
+      for (const [v, t] of MODEL_CHOICES[key].opts) {
+        const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o);
+      }
+      const saved = localStorage.getItem('model-' + key) || '';
+      sel.value = [...sel.options].some((o) => o.value === saved) ? saved : '';
+      sel.addEventListener('change', () => localStorage.setItem('model-' + key, sel.value));
+      body.appendChild(sel);
+    }
+    row.append(avatar, body, dot);
+    wrap.appendChild(row);
+  }
+}
+
+function buildEffortSelect() {
+  const sel = $('effort');
+  sel.innerHTML = '';
+  const def = document.createElement('option'); def.value = ''; def.textContent = effortDefaultLabel();
+  sel.appendChild(def);
+  for (const [v, t] of EFFORT_CHOICES) {
+    const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o);
+  }
+  const saved = localStorage.getItem('effort-copilot') || '';
+  sel.value = [...sel.options].some((o) => o.value === saved) ? saved : '';
+  sel.addEventListener('change', () => localStorage.setItem('effort-copilot', sel.value));
 }
 
 function applyLang() {
   L = I18N[lang];
   document.documentElement.lang = L.htmlLang;
-  document.title = L.title;
-  $('t-title').textContent = L.title;
-  $('t-sub').textContent = L.sub;
-  $('t-hint').textContent = L.hint;
+  $('t-sidebar-sub').textContent = L.sidebarSub;
+  $('t-members').textContent = L.members;
+  $('t-channel-sub').textContent = L.channelSub;
+  $('t-spend').textContent = L.spend;
+  $('t-hop').textContent = L.hop;
+  $('t-effort').textContent = L.effort;
   $('prompt').placeholder = L.placeholder;
-  $('send').textContent = pending > 0 ? L.sending : L.send;
-  $('reset').textContent = L.reset;
-  $('reset').title = L.resetTitle;
   $('langBtn').textContent = L.langBtn;
-  document.querySelector('.fox').alt = L.foxAlt;
   $('attach').title = L.attach;
   $('chip-remove').title = L.removeImg;
-  for (const p of ['claude', 'codex', 'gemini']) $('t-name-' + p).textContent = L.names[p];
-  buildModelSelects();
+  $('stopBtn').textContent = L.stop;
+  buildMembers();
+  buildEffortSelect();
+  updateHeader(known);
 }
 
-// 圖片附件（一次一張）
-let attachment = null; // { file, url }
+// ---------- 圖片附件 ----------
 function setAttachment(file) {
   clearAttachment();
   if (!file || !file.type.startsWith('image/')) return;
@@ -239,130 +494,82 @@ function setAttachment(file) {
 function clearAttachment() {
   if (attachment) URL.revokeObjectURL(attachment.url);
   attachment = null;
+  uploadedImage = null;
   $('chip').hidden = true;
   $('file').value = '';
 }
 
-function render(md) {
-  if (window.marked && window.DOMPurify) {
-    return DOMPurify.sanitize(marked.parse(md));
+// ---------- 送出訊息 ----------
+function parseMentions(text) {
+  const set = new Set();
+  const re = /@(claude|copilot|all)\b/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    const token = m[1].toLowerCase();
+    if (token === 'all') { set.add('claude'); set.add('copilot'); } else set.add(token);
   }
-  const div = document.createElement('div');
-  div.textContent = md;
-  return '<pre style="white-space:pre-wrap">' + div.innerHTML + '</pre>';
+  return [...set];
 }
 
-let pending = 0;
-function setPending(delta) {
-  pending += delta;
-  const btn = $('send');
-  btn.disabled = pending > 0;
-  btn.textContent = pending > 0 ? L.sending : L.send;
-}
+async function send() {
+  const text = $('prompt').value.trim();
+  if (!text || sendBusy) return;
+  sendBusy = true;
+  updateHeader(known);
 
-async function askOne(provider, prompt, card, image) {
-  const body = card.querySelector('.body');
-  const meta = card.querySelector('.meta');
-  const t0 = Date.now();
-  setPending(1);
-  const tick = setInterval(() => { meta.textContent = L.sec(((Date.now() - t0) / 1000).toFixed(0)); }, 1000);
-  try {
-    const res = await fetch('/api/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, prompt, image, model: $('model-' + provider).value || undefined }),
-    });
-    const data = await res.json();
-    clearInterval(tick);
-    meta.textContent = L.sec(((data.elapsed ?? (Date.now() - t0)) / 1000).toFixed(1));
-    if (data.ok) {
-      body.innerHTML = render(data.answer);
-    } else {
-      body.innerHTML = '<div class="err"></div>';
-      body.firstChild.textContent = L.errPrefix + (data.error || L.unknown);
-    }
-  } catch (err) {
-    clearInterval(tick);
-    meta.textContent = '';
-    body.innerHTML = '<div class="err"></div>';
-    body.firstChild.textContent = L.connFail + err;
-  } finally {
-    setPending(-1);
-  }
-}
-
-async function ask() {
-  const prompt = $('prompt').value.trim();
-  if (!prompt) return;
-  const enabled = ['claude', 'codex', 'gemini'].filter((p) => $('on-' + p).checked);
-  if (!enabled.length) return;
-
-  // 有附件先上傳（一次），三家共用同一張圖
-  let image = null, imgUrl = null;
-  if (attachment) {
-    const { file, url } = attachment;
+  let image = uploadedImage;
+  if (attachment && !image) {
     try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': file.type },
-        body: file,
-      });
+      const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': attachment.file.type }, body: attachment.file });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
       image = data.file;
-      imgUrl = url;
-      attachment = null; // 保留 object URL 給提問區顯示，不 revoke
-      $('chip').hidden = true;
-      $('file').value = '';
     } catch (err) {
       alert(L.uploadFail + err);
+      sendBusy = false; updateHeader(known);
       return;
     }
   }
 
-  const round = document.createElement('div');
-  round.className = 'round';
-  const q = document.createElement('p');
-  q.className = 'q';
-  q.textContent = prompt;
-  if (imgUrl) {
-    const im = document.createElement('img');
-    im.className = 'qimg';
-    im.src = imgUrl;
-    q.appendChild(im);
+  const mentions = parseMentions(text);
+  const opts = {};
+  for (const key of ['claude']) {
+    const sel = $('model-' + key);
+    if (sel && sel.value) opts[key] = { model: sel.value };
   }
-  const cols = document.createElement('div');
-  cols.className = 'cols';
-  round.append(q, cols);
-  $('rounds').prepend(round);
+  const effort = $('effort').value;
+  if (effort) opts.copilot = { model: effort };
 
-  for (const p of enabled) {
-    const card = document.createElement('div');
-    card.className = 'card ' + p;
-    card.innerHTML = '<header><span class="dot"></span>' + L.names[p] +
-      '<span class="mtag"></span><span class="meta"></span></header><div class="body"><span class="waiting"></span></div>';
-    const sel = $('model-' + p);
-    card.querySelector('.mtag').textContent = sel.value ? sel.selectedOptions[0].textContent : '';
-    card.querySelector('.waiting').textContent = L.waiting;
-    cols.appendChild(card);
-    askOne(p, prompt, card, image);
+  try {
+    const res = await fetch('/api/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, mentions, image, opts }),
+    });
+    const data = await res.json();
+    if (!data.ok) alert(data.error || L.connFail);
+    else { $('prompt').value = ''; clearAttachment(); }
+  } catch (err) {
+    alert(L.connFail + err);
+  } finally {
+    sendBusy = false;
+    poll();
   }
-  $('prompt').value = '';
-  $('prompt').focus();
 }
 
-$('send').addEventListener('click', ask);
-$('reset').addEventListener('click', async () => {
-  await fetch('/api/reset', { method: 'POST' });
-  const divider = document.createElement('div');
-  divider.className = 'divider';
-  divider.textContent = L.divider;
-  $('rounds').prepend(divider);
-  $('prompt').focus();
+$('send').addEventListener('click', send);
+$('prompt').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
 });
-for (const p of ['claude', 'codex', 'gemini']) {
-  $('model-' + p).addEventListener('change', () => localStorage.setItem('model-' + p, $('model-' + p).value));
-}
+document.querySelectorAll('button.chip').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const ta = $('prompt');
+    const token = '@' + btn.dataset.m + ' ';
+    const pos = ta.selectionStart ?? ta.value.length;
+    ta.value = ta.value.slice(0, pos) + token + ta.value.slice(pos);
+    ta.focus();
+    ta.selectionStart = ta.selectionEnd = pos + token.length;
+  });
+});
 $('attach').addEventListener('click', () => $('file').click());
 $('file').addEventListener('change', () => setAttachment($('file').files[0]));
 $('chip-remove').addEventListener('click', clearAttachment);
@@ -370,15 +577,37 @@ $('prompt').addEventListener('paste', (e) => {
   const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
   if (item) { e.preventDefault(); setAttachment(item.getAsFile()); }
 });
-$('langBtn').addEventListener('click', () => {
-  lang = lang === 'zh' ? 'en' : 'zh';
-  localStorage.setItem('lang', lang);
-  applyLang();
+$('langBtn').addEventListener('click', () => { lang = lang === 'zh' ? 'en' : 'zh'; localStorage.setItem('lang', lang); applyLang(); });
+
+$('handoffBtn').addEventListener('click', async () => {
+  const opts = {};
+  const claudeSel = $('model-claude');
+  if (claudeSel && claudeSel.value) opts.claude = { model: claudeSel.value };
+  const effort = $('effort').value;
+  if (effort) opts.copilot = { model: effort };
+  const res = await fetch('/api/handoff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: 'claude', opts }) });
+  const data = await res.json();
+  if (!data.ok) alert(data.error);
+  poll();
 });
+$('hostPill').addEventListener('click', async () => {
+  if (known.chair === 'human') return;
+  await fetch('/api/reclaim', { method: 'POST' });
+  poll();
+});
+$('pauseBtn').addEventListener('click', async () => {
+  const res = await fetch('/api/pause', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paused: !known.paused }) });
+  const data = await res.json();
+  known.paused = data.paused;
+  updateHeader(known);
+});
+$('stopBtn').addEventListener('click', async () => {
+  await fetch('/api/stop', { method: 'POST' });
+  poll();
+});
+
 applyLang();
-$('prompt').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); ask(); }
-});
+poll();
 </script>
 </body>
 </html>
